@@ -23,6 +23,7 @@ import numpy as np
 import sys
 import argparse
 import numpy as np
+from numpy.linalg import norm
 import xml.dom.minidom as dom
 from os.path import splitext
 
@@ -176,12 +177,37 @@ class OutputFile:
 	def __init__(self):
 		self.points = {}
 		self.lines = {}
+	#point is a 2 component np.array with coordinates
 	def add_point(self,point,label):
 		self.points[label] = point
+	#point is a 2 component list with labels referencing points
 	def add_line(self,points,label):
 		self.lines[label] = points
 	def to_file(self,fid):
 		pass
+
+class OutputTable(OutputFile):
+	def __init__(self,origin, reference):
+		OutputFile.__init__(self)
+		self.origin = origin
+		self.reference = reference
+
+	def to_file(self,fid):
+		fid.write("Point List\n")
+		fid.write("==========\n\n")
+		fid.write("ID\td_o\t\td_r\n")
+		for l,p in self.points.iteritems():
+			#in m
+			d_o = norm(self.origin - p)/1e3
+			d_r = norm(self.reference - p)/1e3
+			fid.write("%s\t%2.2f\t%2.2f\n" % (l,d_o,d_r))
+
+		fid.write("\nLine List\n")
+		fid.write("=========\n\n")
+		fid.write("ID\tfrom\tto\n")
+		for l, points in self.lines.iteritems():
+			fid.write("%s\t%s\t\t%s\n" % (l, points[0], points[1]))
+
 
 class OutputSVG(OutputFile):
 	def __init__(self,max_coords):
@@ -218,6 +244,7 @@ class OutputSVG(OutputFile):
 		return mm_to_px*res
 
 	def add_point(self,point,label):
+		self.points[label] = point
 		self._add_point_svg(self.to_svg(point),label)
 
 	def _add_point_svg(self,point,label):
@@ -235,7 +262,8 @@ class OutputSVG(OutputFile):
 
 		self.svg.appendChild(text)
 
-	def add_line(self,points,label):
+	def add_line(self,p_refs,label):
+		points = np.array([self.points[str(p_ref)] for p_ref in p_refs])
 		self._add_line_svg(np.array([self.to_svg(p) for p in points]),label)
 
 	def _add_line_svg(self,points,label):
@@ -289,6 +317,8 @@ if __name__ == "__main__":
 	else:
 		filtered = params['filter']
 
+	basename = splitext(params["inputfile"])[0]
+
 	input = None
 	fid = open(params["inputfile"])
 	if splitext(params["inputfile"])[1] == ".stl":
@@ -311,16 +341,26 @@ if __name__ == "__main__":
 
 	points,lines = filter_and_dictify(r_proj,input.get_lines(),filtered)
 
-	#output
-	out = OutputSVG(r_pmax)
+	origin = np.array([0,0])
+	reference = np.array([0.5*r_pmax[0],r_pmax[1]])
+
+	#output svg and table
+	svg_out = OutputSVG(r_pmax)
+	tbl_out = OutputTable(origin, reference)
 	for i,point in points.iteritems():
-		out.add_point(r_proj[i,:],str(i))
-	out.add_point(np.array([0,0]),"Origin")
+		svg_out.add_point(r_proj[i,:],str(i))
+		tbl_out.add_point(r_proj[i,:],str(i))
+	svg_out.add_point(origin,"Origin")
+	svg_out.add_point(reference,"Reference")
 
 	for i,line in lines.iteritems():
-		out.add_line([r_proj[j,:] for j in line],str(i))
+		svg_out.add_line(line,str(i))
+		tbl_out.add_line(line,str(i))
 
-	fid = open(splitext(params["inputfile"])[0] + "_perspective.svg","w")
-	out.to_file(fid)
+	fid = open(basename + "_perspective.svg","w")
+	svg_out.to_file(fid)
 	fid.close()
-	
+
+	fid = open(basename + "_perspective.table","w")
+	tbl_out.to_file(fid)
+	fid.close()
