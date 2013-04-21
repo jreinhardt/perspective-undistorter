@@ -191,7 +191,7 @@ class OutputSVG(OutputFile):
 
 		#the scale factor is heuristically determined to give a good
 		#font size on A4 paper
-		self.fontsize = (max_coords).max()/20
+		self.fontsize = (max_coords).max()/30
 
 		#set up svg DOM
 		self.dom = dom.Document()
@@ -282,8 +282,6 @@ if __name__ == "__main__":
 
 	params = vars(parser.parse_args())
 
-	input = None
-
 	#get filtered edges
 	filtered = None
 	if not params['filter_file'] is None:
@@ -291,8 +289,7 @@ if __name__ == "__main__":
 	else:
 		filtered = params['filter']
 
-	print filtered
-
+	input = None
 	fid = open(params["inputfile"])
 	if splitext(params["inputfile"])[1] == ".stl":
 		input =  InputSTL(fid)
@@ -314,8 +311,6 @@ if __name__ == "__main__":
 
 	points,lines = filter_and_dictify(r_proj,input.get_lines(),filtered)
 
-	print lines
-
 	#output
 	out = OutputSVG(r_pmax)
 	for i,point in points.iteritems():
@@ -323,7 +318,6 @@ if __name__ == "__main__":
 	out.add_point(np.array([0,0]),"Origin")
 
 	for i,line in lines.iteritems():
-		print i, line
 		out.add_line([r_proj[j,:] for j in line],str(i))
 
 	fid = open(splitext(params["inputfile"])[0] + "_perspective.svg","w")
