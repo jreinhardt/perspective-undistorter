@@ -134,7 +134,9 @@ class InputSTL(InputFile):
 				parts = fid.readline().split()
 				point = map(float,parts[1:])
 				fabs_point = np.fabs(np.array(point))
-				self.bbox = np.where(fabs_point > self.bbox,fabs_point,self.bbox)
+				self.bbox[0] = max(self.bbox[0],point[0])
+				self.bbox[1] = max(self.bbox[1],np.fabs(point[1]))
+				self.bbox[2] = max(self.bbox[2],point[2])
 				if not point in self.points:
 					idx.append(len(self.points))
 					self.points.append(point)
