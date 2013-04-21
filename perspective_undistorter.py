@@ -195,12 +195,15 @@ class OutputTable(OutputFile):
 	def to_file(self,fid):
 		fid.write("Point List\n")
 		fid.write("==========\n\n")
-		fid.write("ID\td_o\t\td_r\n")
+		fid.write("ID\t\td_o\t\td_r\n")
+		d_or = norm(self.reference - self.origin)/1e3
+		fid.write("%s\t%2.2f\t%2.2f\n" % ("Orig",0,d_or))
+		fid.write("%s\t\t%2.2f\t%2.2f\n" % ("Ref",d_or,0))
 		for l,p in self.points.iteritems():
 			#in m
 			d_o = norm(self.origin - p)/1e3
 			d_r = norm(self.reference - p)/1e3
-			fid.write("%s\t%2.2f\t%2.2f\n" % (l,d_o,d_r))
+			fid.write("%s\t\t%2.2f\t%2.2f\n" % (l,d_o,d_r))
 
 		fid.write("\nLine List\n")
 		fid.write("=========\n\n")
