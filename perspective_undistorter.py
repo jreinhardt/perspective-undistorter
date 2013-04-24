@@ -193,23 +193,36 @@ class OutputTable(OutputFile):
 		self.reference = reference
 
 	def to_file(self,fid):
+		#sort points in nearest neighbor order for efficient painting
+		l_nn = []
+		current = self.origin
+		for i in range(len(self.points)):
+			cand = None
+			for l,p in self.points.iteritems():
+				if l in l_nn:
+					continue
+				if cand is None or norm(current - p) < norm(current - self.points[cand]):
+					cand = l
+			l_nn.append(cand)
+			current = self.points[cand]
+
 		fid.write("Point List\n")
 		fid.write("==========\n\n")
-		fid.write("ID\t\td_o\t\td_r\n")
+		fid.write("ID\td_o \td_r\n")
 		d_or = norm(self.reference - self.origin)/1e3
-		fid.write("%s\t%2.2f\t%2.2f\n" % ("Orig",0,d_or))
-		fid.write("%s\t\t%2.2f\t%2.2f\n" % ("Ref",d_or,0))
-		for l,p in self.points.iteritems():
+		fid.write("%s\t%2.2f\t%2.2f\n" % ("Or",0,d_or))
+		fid.write("%s\t%2.2f\t%2.2f\n" % ("Rf",d_or,0))
+		for l in l_nn:
 			#in m
-			d_o = norm(self.origin - p)/1e3
-			d_r = norm(self.reference - p)/1e3
-			fid.write("%s\t\t%2.2f\t%2.2f\n" % (l,d_o,d_r))
+			d_o = norm(self.origin - self.points[l])/1e3
+			d_r = norm(self.reference - self.points[l])/1e3
+			fid.write("%s\t%2.2f\t%2.2f\n" % (l,d_o,d_r))
 
 		fid.write("\nLine List\n")
 		fid.write("=========\n\n")
-		fid.write("ID\tfrom\tto\n")
+		fid.write("ID\tsrc\tdst\n")
 		for l, points in self.lines.iteritems():
-			fid.write("%s\t%s\t\t%s\n" % (l, points[0], points[1]))
+			fid.write("%s\t%s\t%s\n" % (l, points[0], points[1]))
 
 
 class OutputSVG(OutputFile):
