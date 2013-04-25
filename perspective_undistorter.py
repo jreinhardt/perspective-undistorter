@@ -358,7 +358,7 @@ if __name__ == "__main__":
 	points,lines = filter_and_dictify(r_proj,input.get_lines(),filtered)
 
 	origin = np.array([0,0])
-	reference = np.array([0.5*r_pmax[0],r_pmax[1]])
+	reference = np.array([0.5*np.max(r_proj[:,0]),np.max(r_proj[:,1])])
 
 	#output svg and table
 	svg_out = OutputSVG(r_pmax)
