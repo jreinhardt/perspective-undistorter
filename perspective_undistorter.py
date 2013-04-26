@@ -26,6 +26,7 @@ import numpy as np
 from numpy.linalg import norm
 import xml.dom.minidom as dom
 from os.path import splitext
+from random import choice
 
 #STL units are assumed to be mm
 #SVG units are px, conversion:
@@ -160,7 +161,37 @@ class InputSTL(InputFile):
 	def get_max_coords(self):
 		return self.bbox
 
-def filter_and_dictify(points,lines,filtered_lines):
+def parse_filter_file(fid):
+	line = fid.readline()
+	lines = {'filtered':[], 'partial':[], 'extra':[]}
+	mode = None
+	while not line == '':
+		line = line.strip()
+		if len(line) == 0:
+			#empty line
+			pass
+		elif line[0] == '[':
+			#section header line
+			mode = line[1:-1]
+			if not mode in lines.keys():
+				print "Unknown section '%s' encountered when parsing filter file"
+		else:
+			if mode == 'extra':
+				points = map(int,line.split())
+				lines[mode].append(points)
+			else:
+				line = int(line)
+				lines[mode].append(line)
+		line = fid.readline()
+	return lines['filtered'],lines['partial'], lines['extra']
+			
+			
+
+	return filtered_lines, partial_lines, extra_lines
+
+def filter_and_dictify(points,lines,filtered_lines, extra_lines):
+	if len(extra_lines) > 0:
+		lines = np.vstack((input.get_lines(), np.array(extra)))
 	new_points = {}
 	new_lines = {}
 	#filter lines
@@ -177,12 +208,15 @@ class OutputFile:
 	def __init__(self):
 		self.points = {}
 		self.lines = {}
+		self.lines_partial = []
 	#point is a 2 component np.array with coordinates
 	def add_point(self,point,label):
 		self.points[label] = point
 	#point is a 2 component list with labels referencing points
-	def add_line(self,points,label):
+	def add_line(self,points,label,partial=False):
 		self.lines[label] = points
+		if partial:
+			self.lines_partial.append(label)
 	def to_file(self,fid):
 		pass
 
@@ -222,12 +256,26 @@ class OutputTable(OutputFile):
 		fid.write("=========\n\n")
 		fid.write("ID\tsrc\tdst\n")
 		for l, points in self.lines.iteritems():
-			fid.write("%s\t%s\t%s\n" % (l, points[0], points[1]))
+			if not l in self.lines_partial:
+				fid.write("%s\t%s\t%s\n" % (l, points[0], points[1]))
+
+		fid.write("\nPartial Line List\n")
+		fid.write("=========\n\n")
+		fid.write("ID\tsrc\tdst\n")
+		for l, points in self.lines.iteritems():
+			if l in self.lines_partial:
+				fid.write("%s\t%s\t%s\n" % (l, points[0], points[1]))
 
 
 class OutputSVG(OutputFile):
-	def __init__(self,max_coords):
+	def __init__(self,max_coords, colorful):
 		OutputFile.__init__(self)
+
+		if colorful:
+			self.colors = ['#0000ff','#ff0000','#ff00ff','#ffff00','#00ffff']
+		else:
+			self.colors = ['#000000']
+		self.partial_color = '#888888'
 
 		self.max_coords = max_coords
 
@@ -278,11 +326,17 @@ class OutputSVG(OutputFile):
 
 		self.svg.appendChild(text)
 
-	def add_line(self,p_refs,label):
+	def add_line(self,p_refs,label,partial=True):
 		points = np.array([self.points[str(p_ref)] for p_ref in p_refs])
-		self._add_line_svg(np.array([self.to_svg(p) for p in points]),label)
 
-	def _add_line_svg(self,points,label):
+		color = None
+		if partial:
+			color = self.partial_color
+		else:
+			color = choice(self.colors)
+		self._add_line_svg(np.array([self.to_svg(p) for p in points]),label, color)
+
+	def _add_line_svg(self,points,label,color):
 		g = self.dom.createElement('g')
 
 		#line
@@ -291,13 +345,13 @@ class OutputSVG(OutputFile):
 		for i in range(points.shape[0]):
 			path_string += "%.6f,%.6f " % tuple(points[i])
 		path.setAttribute('d',path_string)
-		path.setAttribute('style',"fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1")
+		path.setAttribute('style',"fill:none;stroke:%s;stroke-width:%dpx;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" % (color,self.fontsize/10))
 		g.appendChild(path)
 
 		#label
 		text = self.dom.createElement('text')
 		text.setAttribute('xml:space',"preserve")
-		text.setAttribute('style',"font-size:%dpx;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;line-height:125%%;letter-spacing:0px;word-spacing:0px;fill:#ff0000;fill-opacity:1;stroke:none;font-family:Arial;-inkscape-font-specification:Arial" % self.fontsize)
+		text.setAttribute('style',"font-size:%dpx;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;line-height:125%%;letter-spacing:0px;word-spacing:0px;fill:%s;fill-opacity:1;stroke:none;font-family:Arial;-inkscape-font-specification:Arial" % (self.fontsize,color))
 		text.setAttribute('x',str(points[:,0].sum()*0.5))
 		text.setAttribute('y',str(points[:,1].sum()*0.5))
 		
@@ -320,18 +374,27 @@ if __name__ == "__main__":
 	parser.add_argument("--height", type=int, help="Height of the observer in mm", default=1700)
 	parser.add_argument("--distance", type=int, help="Distance of the drawing to the observer, only relevant for projection of a 2D drawing", default=100)
 	parser.add_argument("--epsilon", type=int, help="Distance of the upper edge of the drawing to the height of the observer. The smaller, the large the projection will get, only applies to 2D drawing", default=50)
+	parser.add_argument("--colorful", type=bool, nargs='?', help="Color lines randomly in the output SVG. This is useful while creating a filter file", default=False, const=True)
 	parser.add_argument("--filter", type=int, nargs='+', help="Line indices that should be suppressed in the output", default=[])
+	parser.add_argument("--partial", type=int, nargs='+', help="Line indices of partially hidden lines, that should be marked in the output", default=[])
+	parser.add_argument("--extra", type=int, nargs='+', help="Pairs of point indices for which extra lines should be added", default=[])
 	parser.add_argument("--filter-file", type=str, help="File that contains the indices of the edges that should be suppressed in the output", default=None)
 	parser.add_argument("inputfile", type=str, help="A .svg or a .stl file")
 
 	params = vars(parser.parse_args())
 
-	#get filtered edges
+	#get filtered, partial and extra edges
 	filtered = None
+	partial = None
+	extra = None
 	if not params['filter_file'] is None:
-		filtered = map(int,open(params['filter_file']).read().split())
+		filtered,partial,extra = parse_filter_file(open(params['filter_file']))
 	else:
 		filtered = params['filter']
+		partial = params['partial']
+		if not len(params['extra']) % 2 == 0:
+			print "Invalid parameters for --extra. Pairs of point indices are required"
+		extra = map(list,zip(params[0::2],params[1::2]))
 
 	basename = splitext(params["inputfile"])[0]
 
@@ -355,13 +418,13 @@ if __name__ == "__main__":
 	r_proj[:,0] = params["height"]*r_obj[:,0]/(params["height"] - r_obj[:,2])
 	r_proj[:,1] = params["height"]*r_obj[:,1]/(params["height"] - r_obj[:,2])
 
-	points,lines = filter_and_dictify(r_proj,input.get_lines(),filtered)
+	points,lines = filter_and_dictify(r_proj,input.get_lines(),filtered, np.array(extra))
 
 	origin = np.array([0,0])
 	reference = np.array([0.5*np.max(r_proj[:,0]),np.max(r_proj[:,1])])
 
 	#output svg and table
-	svg_out = OutputSVG(r_pmax)
+	svg_out = OutputSVG(r_pmax,params['colorful'])
 	tbl_out = OutputTable(origin, reference)
 	for i,point in points.iteritems():
 		svg_out.add_point(r_proj[i,:],str(i))
@@ -370,8 +433,8 @@ if __name__ == "__main__":
 	svg_out.add_point(reference,"Reference")
 
 	for i,line in lines.iteritems():
-		svg_out.add_line(line,str(i))
-		tbl_out.add_line(line,str(i))
+		svg_out.add_line(line,str(i),i in partial)
+		tbl_out.add_line(line,str(i),i in partial)
 
 	fid = open(basename + "_perspective.svg","w")
 	svg_out.to_file(fid)
