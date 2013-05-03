@@ -394,7 +394,7 @@ if __name__ == "__main__":
 		partial = params['partial']
 		if not len(params['extra']) % 2 == 0:
 			print "Invalid parameters for --extra. Pairs of point indices are required"
-		extra = map(list,zip(params[0::2],params[1::2]))
+		extra = map(list,zip(params['extra'][0::2],params['extra'][1::2]))
 
 	basename = splitext(params["inputfile"])[0]
 
