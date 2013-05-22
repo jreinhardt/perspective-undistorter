@@ -167,8 +167,8 @@ def parse_filter_file(fid):
 	mode = None
 	while not line == '':
 		line = line.strip()
-		if len(line) == 0:
-			#empty line
+		if len(line) == 0 or line[0] == '#':
+			#empty line or comment
 			pass
 		elif line[0] == '[':
 			#section header line
