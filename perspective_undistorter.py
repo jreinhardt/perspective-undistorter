@@ -406,12 +406,6 @@ if __name__ == "__main__":
 		input =  InputSVG(fid,params["distance"],params["epsilon"],params["height"])
 	fid.close()
 
-	#Maximum proj extensions
-	r_max = input.get_max_coords()
-	r_pmax = np.zeros((2,))
-	r_pmax[0] = params["height"]*r_max[0]/(params["height"] - r_max[2])
-	r_pmax[1] = params["height"]*r_max[1]/(params["height"] - r_max[2])
-
 	#Projection
 	r_obj = input.get_points()
 	r_proj = np.zeros((r_obj.shape[0],2))
@@ -420,8 +414,14 @@ if __name__ == "__main__":
 
 	points,lines = filter_and_dictify(r_proj,input.get_lines(),filtered, np.array(extra))
 
+	#Maximum proj extensions
+	r_max = input.get_max_coords()
+	r_pmax = np.zeros((2,))
+	for coord in points.values():
+		r_pmax = np.maximum(r_pmax,coord)
+
 	origin = np.array([0,0])
-	reference = np.array([0.5*np.max(r_proj[:,0]),np.max(r_proj[:,1])])
+	reference = np.array([0.5*r_pmax[0],r_pmax[1]])
 
 	#output svg and table
 	svg_out = OutputSVG(r_pmax,params['colorful'])
